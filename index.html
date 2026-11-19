@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Beep Radar</title>
+<meta name="description" content="Find a GPS coordinate by sound. Send a link, follow the beeps. No account, no tracking: the coordinates live only in the link.">
+<meta name="theme-color" content="#0b0f14">
+<meta name="referrer" content="no-referrer">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta property="og:title" content="Beep Radar">
+<meta property="og:description" content="Find a GPS coordinate by sound. Send a link, follow the beeps.">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" crossorigin="anonymous">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="top">
+  <a href="#" class="brand" id="brandLink"><svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="14" fill="none" stroke="currentColor" stroke-width="2.5"/><circle cx="16" cy="16" r="8" fill="none" stroke="currentColor" stroke-width="2.5" opacity=".6"/><circle cx="16" cy="16" r="3" fill="currentColor"/></svg>Beep Radar</a>
+  <div class="lang" role="group" aria-label="Language">
+    <button type="button" data-lang="fi">FI</button><button type="button" data-lang="en">EN</button>
+  </div>
+</header>
+
+<!-- ========== CREATE ========== -->
+<main id="createView" hidden>
+  <h1 data-i18n="createTitle"></h1>
+  <p class="lead" data-i18n="createLead"></p>
+
+  <label class="field">
+    <span data-i18n="coordLabel"></span>
+    <textarea id="coordInput" rows="2" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="60.1699, 24.9384"></textarea>
+  </label>
+  <p id="parsed" class="parsed" aria-live="polite"></p>
+  <details class="formats"><summary data-i18n="formatsTitle"></summary>
+    <ul>
+      <li><code>60.1699, 24.9384</code> · <code>60,1699; 24,9384</code></li>
+      <li><code>60°10'11.6"N 24°56'18.2"E</code> · <code>N 60° 10.193' E 24° 56.303'</code></li>
+      <li><code>N 6672000 E 385000</code> · <code>6672000, 385000</code> <span data-i18n="etrsNote"></span></li>
+      <li data-i18n="linkNote"></li>
+    </ul>
+  </details>
+
+  <button type="button" id="useLocBtn" class="btn secondary" data-i18n="useLoc"></button>
+  <p id="locStatus" class="small" aria-live="polite"></p>
+
+  <div id="map" class="map" aria-label="Map"></div>
+  <p class="small" data-i18n="mapHint"></p>
+
+  <div class="row2">
+    <label class="field"><span data-i18n="nameLabel"></span>
+      <input id="nameInput" maxlength="80" autocomplete="off">
+    </label>
+    <label class="field narrow"><span data-i18n="radiusLabel"></span>
+      <input id="radiusInput" type="number" inputmode="decimal" min="0.5" max="50" step="0.5" value="3">
+    </label>
+  </div>
+
+  <button type="button" id="createBtn" class="btn primary" data-i18n="createLink" disabled></button>
+
+  <section id="shareBox" class="share" hidden>
+    <label class="field"><span data-i18n="yourLink"></span>
+      <input id="linkOut" readonly>
+    </label>
+    <div class="btnrow">
+      <button type="button" id="copyBtn" class="btn secondary" data-i18n="copy"></button>
+      <button type="button" id="shareBtn" class="btn secondary" data-i18n="share" hidden></button>
+      <a id="openFindBtn" class="btn secondary" data-i18n="tryIt"></a>
+    </div>
+    <div id="qr" class="qr" aria-label="QR code"></div>
+  </section>
+
+  <details class="info"><summary data-i18n="infoTitle"></summary><div data-i18n-html="infoBody"></div></details>
+</main>
+
+<!-- ========== FIND ========== -->
+<main id="findView" hidden>
+  <div class="target">
+    <h1 id="targetName"></h1>
+    <p id="targetCoords" class="small mono"></p>
+  </div>
+
+  <button type="button" id="startBtn" class="btn start" data-i18n="start"></button>
+  <p id="startNote" class="small center" data-i18n="startNote"></p>
+
+  <section id="radar" class="radar" hidden>
+    <div id="simBadge" class="simbadge" hidden data-i18n="simulation"></div>
+    <div class="dial">
+      <svg id="arrow" class="arrow" viewBox="0 0 100 100" aria-hidden="true">
+        <path d="M50 6 L78 80 L50 64 L22 80 Z" />
+      </svg>
+      <div class="check" aria-hidden="true">✓</div>
+    </div>
+    <div id="dist" class="dist" aria-live="off">–</div>
+    <div id="arrived" class="arrivedText" data-i18n="arrived"></div>
+    <div class="meta">
+      <span id="acc" class="mono">±– m</span>
+      <span id="headingMode"></span>
+    </div>
+    <p id="warn" class="warn" hidden data-i18n="accWarn"></p>
+    <p id="geoErr" class="error" hidden></p>
+
+    <div class="controls">
+      <button type="button" id="muteBtn" class="btn secondary small-btn" aria-pressed="false"></button>
+      <label class="vol"><span data-i18n="volume"></span>
+        <input id="volume" type="range" min="0" max="1" step="0.05">
+      </label>
+    </div>
+
+    <label class="switch"><input type="checkbox" id="simToggle"> <span data-i18n="simulate"></span></label>
+    <div id="simPad" class="simpad" hidden>
+      <div class="pad">
+        <button type="button" data-move="n" aria-label="North">▲</button>
+        <button type="button" data-move="w" aria-label="West">◀</button>
+        <button type="button" data-move="e" aria-label="East">▶</button>
+        <button type="button" data-move="s" aria-label="South">▼</button>
+      </div>
+      <p class="small" data-i18n="simHelp"></p>
+      <button type="button" id="jumpBtn" class="btn secondary" data-i18n="jump"></button>
+    </div>
+  </section>
+
+  <nav class="links">
+    <a href="#" id="backLink" data-i18n="back"></a>
+    <a id="mapsLink" target="_blank" rel="noopener noreferrer" data-i18n="openMaps"></a>
+  </nav>
+
+  <details class="info"><summary data-i18n="infoTitle"></summary><div data-i18n-html="infoBody"></div></details>
+</main>
+
+<footer class="foot"><span data-i18n="footer"></span> · <a id="srcLink" href="https://github.com/" target="_blank" rel="noopener noreferrer">GitHub</a></footer>
+
+<script src="qrcode.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js" crossorigin="anonymous"></script>
+<script type="module" src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,9 @@
+{
+  "name": "beep-radar",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Find a GPS coordinate by sound. Static PWA, no backend.",
+  "license": "MIT",
+  "scripts": { "test": "node --test test/*.test.mjs" }
+}
