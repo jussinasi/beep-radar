@@ -2,7 +2,7 @@
 
 Find a GPS coordinate by sound, like a metal detector. Enter a coordinate, send the link, and the person who opens it follows the beeps to the spot.
 
-**Live:** https://REPLACE_USER.github.io/beep-radar/
+**Live:** https://jussinasi.github.io/beep-radar/
 
 - Accepts decimal degrees, degrees-minutes-seconds, **ETRS-TM35FIN** (Finland, EPSG:3067), and Google Maps / OpenStreetMap links
 - The beeps get faster and higher-pitched as you get closer, and the screen turns green when you arrive
