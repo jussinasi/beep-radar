@@ -1,5 +1,5 @@
 // Beep Radar service worker: app shell offline, map tiles never cached.
-const VERSION = 'beep-radar-v1';
+const VERSION = 'beep-radar-v2';
 const SHELL = ['./', 'index.html', 'style.css', 'app.js', 'lib.js', 'qrcode.js', 'manifest.webmanifest', 'icon.svg', 'icon-192.png', 'icon-512.png'];
 const CDN = 'https://cdnjs.cloudflare.com/';
 

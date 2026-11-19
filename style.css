@@ -80,12 +80,12 @@ input:focus, textarea:focus { outline: none; border-color: var(--accent); }
 }
 .radar { text-align: center; position: relative; }
 .simbadge { display: inline-block; background: var(--warn); color: var(--warn-ink); font-weight: 800; letter-spacing: .12em; padding: 4px 12px; border-radius: 6px; margin: 4px 0; }
-.dial { position: relative; width: min(62vw, 260px); aspect-ratio: 1; margin: 10px auto 0; border-radius: 50%; border: 3px solid var(--line); display: grid; place-items: center; }
-.dial::before { content: "N"; position: absolute; top: -2px; left: 50%; transform: translate(-50%, -100%); font-size: .8rem; color: var(--muted); opacity: 0; }
-body.northup .dial::before { opacity: 1; }
-.arrow { width: 72%; height: 72%; fill: var(--accent); transition: transform .25s ease-out; }
-.arrow.nofix { fill: var(--line); }
-.check { position: absolute; font-size: 7rem; font-weight: 900; color: #fff; opacity: 0; }
+.dial { position: relative; width: min(88vw, 380px); aspect-ratio: 1; margin: 8px auto 0; border-radius: 50%; display: grid; place-items: center;
+  box-shadow: 0 0 0 3px #0f3d22, 0 0 28px rgba(56,224,140,.25); background: #010d06; }
+.scope { position: absolute; inset: 0; width: 100%; height: 100%; border-radius: 50%; }
+.arrow { position: relative; width: 17%; height: 17%; fill: #b9ffd8; filter: drop-shadow(0 0 4px rgba(56,224,140,.9)); transition: transform .25s ease-out; }
+.arrow.nofix { fill: #1d4d31; filter: none; }
+.check { position: absolute; font-size: 3.2rem; font-weight: 900; color: #eafff2; opacity: 0; text-shadow: 0 0 12px #38e08c; }
 .dist { font-size: clamp(3.5rem, 18vw, 6rem); font-weight: 800; line-height: 1.05; margin: 10px 0 0; font-variant-numeric: tabular-nums; }
 .arrivedText { font-size: 1.8rem; font-weight: 800; display: none; }
 .meta { display: flex; justify-content: center; gap: 16px; color: var(--muted); margin: 6px 0; flex-wrap: wrap; }
@@ -106,7 +106,7 @@ body.northup .dial::before { opacity: 1; }
 .links a { padding: 10px 0; font-weight: 600; }
 
 body.arrived { background: var(--arrived-bg); }
-body.arrived .dial { border-color: #fff; }
+body.arrived .dial { box-shadow: 0 0 0 3px #eafff2, 0 0 40px rgba(255,255,255,.5); }
 body.arrived .arrow { opacity: 0; }
 body.arrived .check { opacity: 1; }
 body.arrived .arrivedText { display: block; }

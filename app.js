@@ -216,7 +216,7 @@ const S = {
 
 // ---- audio ----
 const audio = {
-  ctx: null, master: null, next: 0, timer: null,
+  ctx: null, master: null, next: 0, timer: null, times: [],
   volume: parseFloat(store.get('vol', '0.8')), muted: store.get('muted', '0') === '1',
   start() {
     const AC = window.AudioContext || window.webkitAudioContext;
@@ -261,6 +261,7 @@ const audio = {
       if (S.arrived) this.beep(this.next, 1500, 0.1, 0.55); // continuous pulsing tone
       else this.beep(this.next, beepPitch(d, target.r), 0.06, 0.6);
       this.last = this.next;
+      this.times.push(this.next); if (this.times.length > 6) this.times.shift();
       this.next += interval;
     }
   },
@@ -378,10 +379,115 @@ function stopFinding() {
   document.body.classList.remove('arrived', 'northup');
 }
 
-function loop() {
+function loop(ts) {
   if (!S.running) return;
   renderFind();
+  drawScope(ts || performance.now());
   requestAnimationFrame(loop);
+}
+
+// ---------------- Sonar scope ----------------
+const view = { d: null, rel: 0, heading: 0, mode: 'north', range: null, rangeShown: null };
+const RANGES = [5, 10, 20, 50, 100, 200, 500, 1e3, 2e3, 5e3, 1e4, 2e4, 5e4, 1e5, 2e5, 5e5, 1e6, 2e6, 5e6, 1e7, 2e7];
+const SWEEP_S = 3;
+const fmtRange = (m) => (m >= 1000 ? `${+(m / 1000).toFixed(m < 10000 ? 1 : 0)} km` : `${+m.toFixed(m < 10 ? 1 : 0)} m`);
+function pickRange(d) {
+  const want = RANGES.find((r) => r >= d * 1.2) || RANGES[RANGES.length - 1];
+  const cur = view.range;
+  if (cur === null || want > cur) return want;                 // zoom out at once
+  if (want < cur && d * 1.2 < cur * 0.4) return want;          // zoom in only when clearly closer (no flicker)
+  return cur;
+}
+function drawScope(ts) {
+  const cv = $('scope');
+  const size = cv.clientWidth;
+  if (!size) return;
+  const dpr = Math.min(window.devicePixelRatio || 1, 3);
+  if (cv.width !== Math.round(size * dpr)) { cv.width = Math.round(size * dpr); cv.height = Math.round(size * dpr); }
+  const g = cv.getContext('2d');
+  g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const c = size / 2, R = c - 2, TAU = Math.PI * 2;
+  const toXY = (ang, r) => [c + r * Math.sin(ang), c - r * Math.cos(ang)]; // ang: 0 = up, clockwise
+
+  // range: auto-zoom with smooth animation in log space
+  if (view.d !== null) view.range = pickRange(view.d);
+  const range = view.range || 50;
+  view.rangeShown = view.rangeShown ? Math.exp(Math.log(view.rangeShown) + (Math.log(range) - Math.log(view.rangeShown)) * 0.12) : range;
+  const rs = view.rangeShown;
+
+  // background
+  const bg = g.createRadialGradient(c, c, 0, c, c, R);
+  bg.addColorStop(0, '#04301a'); bg.addColorStop(1, '#010d06');
+  g.fillStyle = bg; g.beginPath(); g.arc(c, c, R, 0, TAU); g.fill();
+
+  // rings and cross-hair
+  g.strokeStyle = 'rgba(56,224,140,.28)'; g.lineWidth = 1;
+  for (let i = 1; i <= 4; i++) { g.beginPath(); g.arc(c, c, (R * i) / 4, 0, TAU); g.stroke(); }
+  g.beginPath(); g.moveTo(c - R, c); g.lineTo(c + R, c); g.moveTo(c, c - R); g.lineTo(c, c + R); g.stroke();
+  g.strokeStyle = 'rgba(56,224,140,.12)';
+  g.beginPath();
+  for (let k = 0; k < 12; k++) { if (k % 3 === 0) continue; const a = (k * TAU) / 12; g.moveTo(...toXY(a, R * 0.25)); g.lineTo(...toXY(a, R)); }
+  g.stroke();
+
+  // ring labels
+  g.fillStyle = 'rgba(120,255,180,.75)'; g.font = `600 ${Math.max(10, size / 30)}px ui-monospace, Consolas, monospace`;
+  g.textAlign = 'right'; g.textBaseline = 'bottom';
+  for (let i = 2; i <= 4; i += 2) g.fillText(fmtRange((rs * i) / 4), c + (R * i) / 4 - (i === 4 ? size / 28 : 4), c - 4);
+
+  // north marker on the rim
+  const nAng = view.mode === 'north' ? 0 : -view.heading * Math.PI / 180;
+  const [nx, ny] = toXY(nAng, R - size / 22);
+  g.fillStyle = '#9dffc9'; g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.font = `800 ${Math.max(12, size / 22)}px system-ui, sans-serif`; g.fillText('N', nx, ny);
+
+  // arrival radius
+  if (target && target.r / rs > 0.015 && view.d !== null) {
+    const bAng = view.rel * Math.PI / 180, br = Math.min(view.d / rs, 1.05) * R;
+    const [tx, ty] = toXY(bAng, br);
+    g.setLineDash([4, 4]); g.strokeStyle = 'rgba(157,255,201,.5)';
+    g.beginPath(); g.arc(tx, ty, (target.r / rs) * R, 0, TAU); g.stroke(); g.setLineDash([]);
+  }
+
+  // sweep with phosphor trail
+  const sweep = ((ts / 1000) % SWEEP_S) / SWEEP_S * TAU;
+  const N = 48, trail = TAU * 0.33;
+  for (let i = 0; i < N; i++) {
+    const a1 = sweep - (i * trail) / N, a0 = sweep - ((i + 1) * trail) / N;
+    g.fillStyle = `rgba(56,224,140,${0.32 * Math.pow(1 - i / N, 2)})`;
+    g.beginPath(); g.moveTo(c, c); g.arc(c, c, R, a0 - Math.PI / 2, a1 - Math.PI / 2); g.closePath(); g.fill();
+  }
+  g.strokeStyle = 'rgba(180,255,215,.9)'; g.lineWidth = 2;
+  g.beginPath(); g.moveTo(c, c); g.lineTo(...toXY(sweep, R)); g.stroke();
+
+  // target blip
+  if (view.d !== null && target) {
+    const bAng = view.rel * Math.PI / 180;
+    const outside = view.d > rs;
+    const br = Math.min(view.d / rs, 1) * (outside ? R - 8 : R);
+    const [x, y] = toXY(bAng, br);
+    const since = (((sweep - bAng) % TAU) + TAU) % TAU;          // radians since the sweep passed the blip
+    const lit = Math.exp(-since * 1.1);                             // phosphor afterglow
+    const pulse = 0.5 + 0.5 * Math.sin(ts / 160);
+    const glow = 0.35 + 0.65 * Math.max(lit, 0.35 * pulse);
+    const halo = size / 18 * (0.8 + glow);
+    const hg = g.createRadialGradient(x, y, 0, x, y, halo);
+    hg.addColorStop(0, `rgba(190,255,220,${glow})`); hg.addColorStop(0.35, `rgba(56,224,140,${0.7 * glow})`); hg.addColorStop(1, 'rgba(56,224,140,0)');
+    g.fillStyle = hg; g.beginPath(); g.arc(x, y, halo, 0, TAU); g.fill();
+    g.fillStyle = `rgba(220,255,235,${0.6 + 0.4 * glow})`; g.beginPath(); g.arc(x, y, Math.max(3, size / 70), 0, TAU); g.fill();
+    // a ring ripples out from the blip on every beep
+    if (audio.ctx) {
+      const now = audio.ctx.currentTime;
+      const tb = audio.times.filter((t0) => t0 <= now).pop();
+      if (tb !== undefined && now - tb < 0.7) {
+        const age = (now - tb) / 0.7;
+        g.strokeStyle = `rgba(157,255,201,${1 - age})`; g.lineWidth = 2;
+        g.beginPath(); g.arc(x, y, size / 60 + age * size / 9, 0, TAU); g.stroke();
+      }
+    }
+  }
+
+  // rim
+  g.strokeStyle = 'rgba(56,224,140,.55)'; g.lineWidth = 2; g.beginPath(); g.arc(c, c, R, 0, TAU); g.stroke();
 }
 
 let lastArrowDeg = 0;
@@ -411,12 +517,14 @@ function renderFind() {
   document.body.classList.toggle('northup', hi.mode === 'north');
   if (p) {
     const rel = bearing(p.lat, p.lon, target.lat, target.lon) - hi.h;
+    view.rel = rel;
     // rotate the shortest way to avoid spinning through 360
     let delta = ((rel - lastArrowDeg) % 360 + 540) % 360 - 180;
     lastArrowDeg += delta;
     arrow.style.transform = `rotate(${lastArrowDeg}deg)`;
     arrow.classList.remove('nofix');
   } else arrow.classList.add('nofix');
+  view.d = d; view.heading = hi.h; view.mode = hi.mode;
 
   $('warn').hidden = !(d !== null && acc !== null && acc > d && !S.arrived);
   $('geoErr').hidden = !S.geoErr || S.sim;
